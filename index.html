@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carbon Lab · Explore molecules in 3D</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="explore.css">
+</head>
+<body>
+<main class="scene" id="scene">
+  <canvas id="cv" aria-label="Interactive 3D molecule. Drag to rotate, scroll or pinch to zoom, tap an atom to inspect."></canvas>
+  <header class="top">
+    <div class="lt"><div class="brand">Carbon Lab</div><button class="lessons" id="home">☰ Lessons</button></div>
+    <div class="prog" id="prog"></div>
+    <div class="seg" id="mx" role="group" aria-label="Mode"><button data-ux="guided" class="on" title="Follow the lessons step by step">Guided</button><button data-ux="explore" title="Open every tool and build your own molecules">Explore</button></div>
+  </header>
+  <section class="title" id="title" aria-live="polite"></section>
+  <aside class="facts" id="facts" hidden></aside>
+<div class="hint" id="hint">Drag to rotate · scroll or pinch to zoom · tap an atom</div>
+  <div class="info" id="info" hidden aria-live="polite"></div>
+</main>
+<div class="panels"><div class="dock" id="dock" hidden></div>
+  <div class="molbtn" id="molbtn" role="group" aria-label="Current molecule"></div>
+  <aside class="card left" id="left" hidden></aside>
+  <aside class="card right" id="tour"></aside>
+</div>
+<nav class="tools" id="tools" aria-label="Display tools">
+    <div class="grp" data-k="style">
+      <button data-m="ball" class="on" aria-label="Ball and stick" data-tip="Ball and stick: atoms as balls, bonds as sticks."><svg viewBox="0 0 24 24"><circle cx="7" cy="8" r="3.5"/><circle cx="17" cy="16" r="3.5"/><path d="M9.6 10l5 4"/></svg></button>
+      <button data-m="space" aria-label="Space-filling" data-tip="Space-filling: how much room the atoms really take up."><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="16" cy="12" r="5"/></svg></button>
+      <button data-m="skel" aria-label="Skeleton" data-tip="Skeleton: thin lines only, so the shape is easy to see."><svg viewBox="0 0 24 24"><path d="M3 16l6-8 5 8 7-8"/></svg></button>
+    </div>
+    <button data-t="lab" data-k="lab" class="on" aria-label="Labels" data-tip="Show or hide the element letters on the atoms.">Aa</button>
+    <button data-t="elec" data-k="elec" aria-label="Electrons" data-tip="Show each bond's shared pair of electrons as gold dots."><svg viewBox="0 0 24 24"><path d="M3 12h18"/><circle cx="10" cy="12" r="2" fill="currentColor"/><circle cx="14" cy="12" r="2" fill="currentColor"/></svg></button>
+    <button data-t="spot" data-k="spot" class="on" aria-label="Spotlight" data-tip="Tap an atom to zoom in, dim the rest and see its bonds."><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/></svg></button>
+    <button data-t="num" data-k="num" aria-label="Numbers" data-tip="Number the carbons the way the name does.">1·2</button>
+    <button data-t="shape" data-k="shape" class="on" aria-label="Shape guide" data-tip="Show the angle and shape around a selected carbon."><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19L15 6"/><path d="M11 19a7 7 0 0 0-2-5"/></svg></button>
+    <button data-t="reset" data-k="reset" aria-label="Reset view" data-tip="Reset the view to the starting angle."><svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2.2-5.1"/><path d="M5 4v4h4"/></svg></button>
+    <button data-t="save" data-k="save" aria-label="Save image" data-tip="Save a picture of the model."><svg viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg></button>
+  </nav>
+<div class="tip" id="tip" hidden></div>
+<div class="map" id="map" hidden></div>
+<div class="map pickmap" id="pick" hidden></div>
+
+<script src="chem.js"></script>
+<script src="model3d.js"></script>
+<script src="lessons.js"></script>
+<script src="lessonui.js"></script>
+<script src="mini3d.js"></script>
+<script src="explore.js"></script>
+<script src="guide.js"></script>
+</body>
+</html>
