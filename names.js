@@ -15,12 +15,19 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 let NMODE='build',PLAY=null,KEEP=null,WHY=null;
 const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const ST=Object.assign({solved:0,best:0},store.get('cl.names',{}));
-const MS={target:null,streak:0,hints:0,done:false,stars:0,recent:[],focusStep:null};
+const MS={quizOn:false,target:null,kind:'build',streak:0,hints:0,done:false,stars:0,recent:[],focusStep:null,hintText:'',lastHint:0,wrong:[],opts:null,shake:null,fresh:false};
 const GLYPH={an:'C–C',en:'C=C',yn:'C≡C',ol:'–OH',al:'–CHO',one:'C=O',oic:'–COOH'};
 const FAMILY=e=>{const m=/\(an? ([^)]+)\)/.exec(ENDS.find(x=>x[0]==e)[2]);return m?m[1]:''};
 const minN=e=>{for(let n=1;n<=8;n++)if(decOk(e,n))return n;return 9};
 const STEMS_NOTE=n=>n<=4?'Trick: <b>M</b>onkeys <b>E</b>at <b>P</b>eeled <b>B</b>ananas = meth, eth, prop, but.'
   :'Same number words as pentagon, hexagon, heptagon and octagon.';
+const REAL={methane:'The main part of natural gas, used for cooking and heating.',propane:'The fuel in camping stoves and gas braais.',butane:'The fuel in lighters and portable stoves.',
+  ethene:'Fruit ripens faster around it, and it is the starting material for polythene.',ethyne:'Burned in welding torches (it is called acetylene).',
+  methanol:'A solvent and fuel. It is poisonous to drink.',ethanol:'The alcohol in drinks and in hand sanitiser.','propan-2-ol':'Rubbing alcohol (isopropanol), used to clean skin and screens.',
+  methanal:'Formaldehyde, used to preserve biological specimens.',ethanal:'Made in the body when ethanol is broken down.',propanone:'Nail polish remover (acetone).',
+  'ethanoic acid':'Vinegar is a dilute solution of it.','methanoic acid':'The acid in ant stings and nettle stings.',octane:'One of the hydrocarbons in petrol.',hexane:'A solvent used to extract cooking oils.'};
+const realHTML=name=>REAL[name]?`<p class="nl-real"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span><b>In real life:</b> ${REAL[name]}</span></p>`:'';
+const DICE='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="15" cy="9" r="1" fill="currentColor"/><circle cx="9" cy="15" r="1" fill="currentColor"/></svg>';
 const cur=()=>{const[n,o,s,p]=decState();return{n,o,s,p,name:analyse(n,o,s).name}};
 
 /* ---------- pieces shared by all modes ---------- */
@@ -33,12 +40,12 @@ function whyHTML(name){
 }
 function nameCard(label){
   const c=cur(),p=parseName(c.name),comps=p.error?[{k:'stem',t:c.name}]:p.comps;
-  return`<div class="nl-card nl-namecard stick"><span class="nl-lab">${label||'Your name'}</span><div class="nl-name" aria-live="polite">${tilesHTML(comps)}</div>
-    <p class="nl-why" id="nl-why">Hover a piece of the name to light it up in 3D.</p></div>`;   // the meaning chips already sit above the model, so they are not repeated here
+  return`<div class="nl-card nl-namecard stick"><span class="nl-lab">${label||'Your name'}<button type="button" class="nl-dice" id="dice" title="Try a random molecule">${DICE}Surprise me</button></span><div class="nl-name" aria-live="polite">${tilesHTML(comps)}</div>
+    <p class="nl-why" id="nl-why">Hover a piece of the name to light it up in 3D.</p>${realHTML(c.name)}</div>`;   // the meaning chips already sit above the model, so they are not repeated here
 }
 function builderHTML(){
   const c=cur(),r=posRange(DEC.end,DEC.stem),f=MS.focusStep;
-  const beads=STEMW.map((w,i)=>`<button type="button" class="bead ${i<DEC.stem?'on':''} ${i+1==DEC.stem?'cur':''}" data-st="${i+1}" role="radio" aria-checked="${i+1==DEC.stem}" aria-label="${w}-, ${i+1} carbon${i?'s':''}"><i>${i+1}</i><small>${w}</small></button>`).join('');
+  const beads=STEMW.map((w,i)=>`<button type="button" class="bead ${i<DEC.stem?'on':''} ${i+1==DEC.stem?'cur':''}" data-st="${i+1}" role="radio" aria-checked="${i+1==DEC.stem}" aria-label="${w}-, ${i+1} carbon${i?'s':''}"><i style="--d:${i*28}ms">${i+1}</i><small>${w}</small></button>`).join('');
   const cards=ENDS.map(e=>{const ok=decOk(e[0],DEC.stem);return`<button type="button" class="fam ${DEC.end==e[0]?'on':''}" data-en="${e[0]}" aria-pressed="${DEC.end==e[0]}" ${ok?'':'disabled'} ${ok?'':`title="Needs ${minN(e[0])}+ carbons"`}>
       <span class="g">${GLYPH[e[0]]}</span><span class="t"><b>${e[1]}</b><small>${ok?FAMILY(e[0]):'needs '+minN(e[0])+'+ carbons'}</small></span></button>`}).join('');
   let pos='';
@@ -58,6 +65,15 @@ function bindBuilder(){
   $$('[data-en]').forEach(b=>b.onclick=()=>set({end:b.dataset.en},'end',`[data-en="${b.dataset.en}"]`));
   $$('[data-ps]').forEach(b=>b.onclick=()=>set({pos:+b.dataset.ps},'end',`[data-ps="${b.dataset.ps}"]`));
   const c=$('#cnt');if(c)c.onclick=countAnim;
+  const dice=$('#dice');if(dice)dice.onclick=surprise;
+  $$('.beads,.chain').forEach(g=>g.onkeydown=e=>{                       // arrow keys walk along the beads
+    if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft'&&e.key!=='ArrowUp'&&e.key!=='ArrowDown')return;
+    const bs=[...g.querySelectorAll('.bead:not(:disabled)')],i=bs.indexOf(document.activeElement);if(i<0)return;
+    const nx=bs[Math.max(0,Math.min(bs.length-1,i+((e.key=='ArrowRight'||e.key=='ArrowDown')?1:-1)))];if(nx&&nx!==bs[i]){e.preventDefault();nx.click()}});
+}
+function surprise(){
+  const all=candidates(),mine=cur().name,p=all.filter(c=>c.name!==mine),c=p[Math.floor(Math.random()*p.length)];
+  KEEP='#dice';stop();decSet({stem:c.stem,end:c.end,pos:c.pos},'stem');
 }
 function bindTiles(){
   $$('.nl-tile').forEach(t=>{
@@ -104,47 +120,84 @@ function candidates(){
   DEC=save;return CAND;
 }
 const level=()=>Math.min(3,1+Math.floor(ST.solved/4));
-function newMission(){
-  const L=level(),pool=candidates().filter(c=>L==1?['an','en','yn'].includes(c.end)&&c.stem<=5:L==2?['an','en','yn','ol','al'].includes(c.end)&&c.stem<=6:true).filter(c=>!MS.recent.includes(c.name));
-  const mine=cur().name,p=(pool.length?pool:candidates()).filter(c=>c.name!==mine);
-  MS.target=p[Math.floor(Math.random()*p.length)];MS.recent=[MS.target.name,...MS.recent].slice(0,5);MS.hints=0;MS.done=false;MS.stars=0;MS.focusStep=null;
+const pool=()=>{const L=level();return candidates().filter(c=>L==1?['an','en','yn'].includes(c.end)&&c.stem<=5:L==2?['an','en','yn','ol','al'].includes(c.end)&&c.stem<=6:true)};
+function options(t){                                                     // 3 believable wrong answers + the right one, shuffled
+  const score=c=>(c.stem==t.stem?2:0)+(c.end==t.end?2:0)+(c.pos==t.pos?.5:0)+Math.random()*1.5;
+  const wrong=candidates().filter(c=>c.name!==t.name).sort((a,b)=>score(b)-score(a)).slice(0,3).map(c=>c.name);
+  return[...wrong,t.name].sort(()=>Math.random()-.5);
 }
-function checkWin(){
-  if(!MS.target||MS.done)return;
-  if(cur().name===MS.target.name){MS.done=true;MS.stars=Math.max(1,3-MS.hints);MS.streak++;ST.solved++;ST.best=Math.max(ST.best,MS.streak);store.set('cl.names',ST);MS.fresh=true}
+function startMission(){
+  const L=pool().filter(c=>!MS.recent.includes(c.name)),mine=cur().name,p=(L.length?L:pool()).filter(c=>c.name!==mine),t=p[Math.floor(Math.random()*p.length)];
+  MS.kind=ST.solved<2?'build':((window.NamesLab&&window.NamesLab.forceKind)||(Math.random()<.5?'spot':'build'));                      // the first two missions teach the builder
+  MS.target=t;MS.recent=[t.name,...MS.recent].slice(0,5);MS.hints=0;MS.done=false;MS.stars=0;MS.focusStep=null;MS.hintText='';MS.lastHint=0;MS.wrong=[];MS.opts=MS.kind=='spot'?options(t):null;
+  if(MS.kind=='spot'){decSet({stem:t.stem,end:t.end,pos:t.pos},'stem');MS.quizOn=true;setQuiz(true)}   // mystery molecule on stage, with its name hidden (the app's quiz mode)
+  else rightUI();
 }
+function win(){MS.done=true;MS.stars=Math.max(1,3-MS.hints);MS.streak++;ST.solved++;ST.best=Math.max(ST.best,MS.streak);store.set('cl.names',ST);MS.fresh=true}
+function checkWin(){if(MS.kind=='build'&&MS.target&&!MS.done&&cur().name===MS.target.name)win()}
 function hint(){
-  const t=MS.target,d={stem:DEC.stem,end:DEC.end,pos:cur().p};
-  MS.hints++;MS.focusStep=d.stem!==t.stem?1:d.end!==t.end?2:3;rightUI();
+  const t=MS.target;MS.hints++;
+  if(MS.kind=='spot'){                                                    // take away one wrong option
+    const w=MS.opts.filter(o=>o!==t.name&&!MS.wrong.includes(o));if(w.length)MS.wrong.push(w[Math.floor(Math.random()*w.length)]);MS.hintText='One wrong answer removed.';rightUI();return;
+  }
+  const d={stem:DEC.stem,end:DEC.end,pos:cur().p},step=d.stem!==t.stem?1:d.end!==t.end?2:3;
+  MS.focusStep=step;
+  MS.hintText=MS.lastHint===step?(step==1?`Try <b>${STEMW[t.stem-1]}-</b>: that is ${t.stem} carbon${t.stem>1?'s':''}.`:step==2?`Try <b>${ENDS.find(e=>e[0]==t.end)[1]}</b>.`:`Try carbon <b>${t.pos}</b>.`):
+    (step==1?'Check step 1: how many carbons?':step==2?'Check step 2: what kind of molecule?':'Check step 3: which carbon?');
+  MS.lastHint=step;rightUI();
+}
+function pick(name){
+  if(MS.done||MS.wrong.includes(name))return;
+  if(name===MS.target.name)win();else{MS.wrong.push(name);MS.hints++;MS.shake=name}
+  rightUI();
 }
 const confetti=()=>`<span class="nl-conf" aria-hidden="true">${Array.from({length:26},(_,i)=>`<i style="--x:${(Math.random()*2-1)*150|0}px;--y:${-(30+Math.random()*130)|0}px;--r:${(Math.random()*720-360)|0}deg;--c:${['#2f5bea','#f5b942','#12a37a','#e0483b','#7a3fd0'][i%5]};--d:${(Math.random()*.22).toFixed(2)}s"></i>`).join('')}</span>`;
+const starsHTML=n=>[1,2,3].map(i=>`<svg class="star ${i<=n?'on':''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z"/></svg>`).join('');
+const nameTiles=(name,extra)=>{const p=parseName(name);return(p.error?[{k:'stem',t:name}]:p.comps).map(c=>`<span class="nl-tile plain ${extra||''}">${c.t}</span>`).join('')};
 function missionsHTML(){
-  if(!MS.target)newMission();checkWin();
-  const t=MS.target,tp=parseName(t.name),tcomps=tp.error?[{k:'stem',t:t.name}]:tp.comps,fresh=MS.fresh;MS.fresh=false;
-  const stars=n=>[1,2,3].map(i=>`<svg class="star ${i<=n?'on':''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z"/></svg>`).join('');
-  const head=`<div class="nl-stats"><span class="nl-stat"><b>${MS.streak}</b> streak</span><span class="nl-stat"><b>${ST.best}</b> best</span><span class="nl-stat"><b>${ST.solved}</b> solved</span><span class="nl-stat lvl">Level ${level()}</span></div>`;
-  const target=`<div class="nl-card nl-target ${MS.done?'won':''}"><span class="nl-lab">Mission: build the molecule called</span>
-      <div class="nl-name plain sm">${tcomps.map(c=>`<span class="nl-tile plain">${c.t}</span>`).join('')}</div>
-      ${MS.done?`<div class="nl-win" role="status"><div class="stars">${stars(MS.stars)}</div><b>${MS.stars==3?'Perfect!':MS.stars==2?'Nice work!':'You got it!'}</b><p>${t.name} is built. ${MS.hints?'You used '+MS.hints+' hint'+(MS.hints>1?'s':'')+'.':'No hints needed.'}</p></div>${fresh?confetti():''}`:''}
-      <div class="nav"><button class="btn g" id="msk" type="button" ${MS.done?'disabled':''}>Skip</button><button class="btn g" id="mht" type="button" ${MS.done?'disabled':''}>Hint${MS.hints?' ('+MS.hints+')':''}</button>${MS.done?'<button class="btn" id="mnx" type="button">Next mission</button>':''}</div></div>`;
+  if(!MS.target){startMissionSoon();return'<div class="nl-empty"><b>Getting your first mission…</b></div>'}
+  checkWin();
+  const t=MS.target,fresh=MS.fresh;MS.fresh=false;
+  const toNext=level()<3?4-ST.solved%4:0;
+  const head=`<div class="nl-stats"><span class="nl-stat"><b>${MS.streak}</b> streak</span><span class="nl-stat"><b>${ST.best}</b> best</span><span class="nl-stat"><b>${ST.solved}</b> solved</span><span class="nl-stat lvl">Level ${level()}</span></div>
+    ${level()<3?`<div class="nl-lv" role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${4-toNext}" aria-label="Progress to the next level"><i style="width:${(4-toNext)*25}%"></i><small>${toNext} more to reach Level ${level()+1}</small></div>`:''}`;
+  const win_=MS.done?`<div class="nl-win" role="status"><div class="stars">${starsHTML(MS.stars)}</div><b>${MS.stars==3?'Perfect!':MS.stars==2?'Nice work!':'You got it!'}</b><p>${t.name} ${MS.kind=='spot'?'is the right name':'is built'}. ${MS.hints?'You used '+MS.hints+(MS.kind=='spot'?' hint or wrong guess':' hint')+(MS.hints>1?'s':'')+'.':'No hints needed.'}</p>${realHTML(t.name)}</div>${fresh?confetti():''}`:'';
+  const nav=`<div class="nav"><button class="btn g" id="msk" type="button" ${MS.done?'disabled':''}>Skip</button><button class="btn g" id="mht" type="button" ${MS.done||(MS.kind=='spot'&&MS.opts.filter(o=>o!==t.name&&!MS.wrong.includes(o)).length<1)?'disabled':''}>${MS.kind=='spot'?'Remove one':'Hint'}${MS.hints&&MS.kind=='build'?' ('+MS.hints+')':''}</button>${MS.done?'<button class="btn" id="mnx" type="button">Next mission</button>':''}</div>`;
+  if(MS.kind=='spot'){
+    return head+`<div class="nl-card nl-target ${MS.done?'won':''}"><span class="nl-lab">Mission: what is this molecule called?</span>
+      <p class="nl-tip" style="margin-top:0">Look at the 3D model and the drawing, then pick its name.</p>
+      <div class="opts" role="group" aria-label="Answers">${MS.opts.map(o=>{const bad=MS.wrong.includes(o),ok=MS.done&&o===t.name;
+        return`<button type="button" class="opt ${bad?'bad':''} ${ok?'good':''} ${MS.shake===o?'shake':''}" data-o="${o.replace(/"/g,'&quot;')}" ${(bad||MS.done)?'disabled':''}><span class="otiles">${nameTiles(o,'xs')}</span></button>`}).join('')}</div>
+      ${MS.hintText&&!MS.done?`<p class="nl-why">${MS.hintText}</p>`:''}${win_}${nav}</div>`;
+  }
   const mine=`<div class="nl-card nl-namecard stick"><span class="nl-lab">Your molecule is called</span><div class="nl-name sm" aria-live="polite">${(()=>{const c=cur(),p=parseName(c.name);return tilesHTML(p.error?[{k:'stem',t:c.name}]:p.comps)})()}</div>
-      <p class="nl-why" id="nl-why">${MS.done?'Match!':'Change the blocks below until the two names match.'}</p></div>`;
-  return head+target+mine+builderHTML();
+      <p class="nl-why" id="nl-why">${MS.done?'Match!':(MS.hintText||'Change the blocks below until the two names match.')}</p></div>`;
+  return head+`<div class="nl-card nl-target ${MS.done?'won':''}"><span class="nl-lab">Mission: build the molecule called</span><div class="nl-name plain sm">${nameTiles(t.name)}</div>${win_}${nav}</div>`+mine+builderHTML();
 }
+let soon=0;const startMissionSoon=()=>{if(soon)return;soon=setTimeout(()=>{soon=0;startMission()},0)};
 function bindMissions(){
-  const n=$('#mnx');if(n)n.onclick=()=>{newMission();rightUI()};
-  const s=$('#msk');if(s)s.onclick=()=>{MS.streak=0;newMission();rightUI()};
+  const nx=$('#mnx');if(nx)nx.onclick=startMission;
+  const s=$('#msk');if(s)s.onclick=()=>{MS.streak=0;startMission()};
   const h=$('#mht');if(h)h.onclick=hint;
+  $$('[data-o]').forEach(b=>b.onclick=()=>pick(b.dataset.o));
+  setTimeout(()=>{MS.shake=null},700);
 }
 
+/* the name stays hidden only while a molecule-naming mission is open and unanswered */
+const _rightUI=window.rightUI;
+window.rightUI=function(){
+  const r=_rightUI.apply(this,arguments);
+  if(MS.quizOn&&(TAB!=='names'||NMODE!=='missions'||MS.kind!=='spot'||MS.done)){MS.quizOn=false;try{setQuiz(false)}catch(e){}}
+  return r;
+};
 /* ---------- the tab ---------- */
 window.namesUI=function(){
   const modes=[['build','Build'],['decode','Decode'],['missions','Missions']];
   const body=NMODE=='build'?buildHTML():NMODE=='decode'?decodeHTML():missionsHTML();
   $('#tb').innerHTML=`<div class="nl"><div class="nl-head"><b>Name lab</b><span>Every chemical name is a code. Crack it.</span></div>
     <div class="nl-modes" role="tablist" aria-label="Name lab modes">${modes.map(([k,t])=>`<button type="button" role="tab" aria-selected="${NMODE==k}" class="${NMODE==k?'on':''}" data-nm="${k}">${t}</button>`).join('')}</div>${body}</div>`;
-  $$('[data-nm]').forEach(b=>b.onclick=()=>{stop();NMODE=b.dataset.nm;if(NMODE=='missions'){setTimeout(()=>{},0)}rightUI()});
-  if(NMODE=='decode')bindDecode();else{bindBuilder();bindTiles();if(NMODE=='missions')bindMissions()}
+  $$('[data-nm]').forEach(b=>b.onclick=()=>{stop();NMODE=b.dataset.nm;KEEP=`[data-nm="${NMODE}"]`;rightUI()});
+  if(NMODE=='decode')bindDecode();else{if(NMODE=='build'||(MS.kind=='build'&&MS.target))bindBuilder();bindTiles();if(NMODE=='missions')bindMissions()}
   if(KEEP){const e=$(KEEP);KEEP=null;if(e)e.focus({preventScroll:true})}
 };
 
@@ -171,11 +224,10 @@ const css=document.createElement('style');css.id='names-css';css.textContent=`
 .nl-more>summary{cursor:pointer;list-style:none;margin-top:var(--s2);font-size:var(--fs-sm);font-weight:700;color:var(--accent)}
 .nl-more>summary::-webkit-details-marker{display:none}
 .nl-more>summary::after{content:" ▾"}.nl-more[open]>summary::after{content:" ▴"}
-.nl-stat{padding:0 var(--s2);font-size:var(--fs-xs)}
 .nl-tile.plain{background:#f1f4f9;border-color:#d3dce9;color:var(--ink);cursor:default}
 @keyframes nlpop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
 .nl-mean{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:var(--s1) 0}
-.nl-why{margin:var(--s1) 0 0;font-size:var(--fs-xs);font-size:var(--fs-sm);line-height:1.4;color:#22314a;text-align:center}
+.nl-why{margin:var(--s1) 0 0;font-size:var(--fs-sm);line-height:1.4;color:#22314a;text-align:center}
 .nl-step{padding:var(--s3) var(--s4) var(--s4);border:1px solid var(--line);border-radius:var(--r-lg);background:#fff}
 .nl-step h4{display:flex;align-items:center;gap:var(--s2);white-space:nowrap;margin:0 0 var(--s3);font-size:var(--fs-md)}
 .nl-n{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:var(--fs-sm);font-weight:700}
@@ -183,7 +235,7 @@ const css=document.createElement('style');css.id='names-css';css.textContent=`
 @keyframes nlnudge{50%{transform:translateX(4px)}}
 .beads{display:grid;grid-template-columns:repeat(8,1fr);gap:var(--s1)}
 .bead{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;padding:0;border:0;background:none;font-size:var(--fs-xs);color:var(--muted)}
-.bead i{display:grid;place-items:center;width:100%;max-width:34px;aspect-ratio:1;border:2px solid #cdd8e8;border-radius:50%;background:#fff;font-style:normal;font-size:var(--fs-sm);font-weight:700;color:var(--muted);transition:background .2s,transform .2s,border-color .2s}
+.bead i{display:grid;place-items:center;width:100%;max-width:34px;aspect-ratio:1;border:2px solid #cdd8e8;border-radius:50%;background:#fff;font-style:normal;font-size:var(--fs-sm);font-weight:700;color:var(--muted);transition:background .2s,transform .2s,border-color .2s;transition-delay:var(--d,0ms)}
 .bead.on i{border-color:#3b4252;background:#3b4252;color:#fff}
 .bead.cur i{transform:scale(1.14);border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 3px var(--accent-s)}
 .bead:hover:not(:disabled) i{border-color:var(--accent)}
@@ -226,8 +278,27 @@ const css=document.createElement('style');css.id='names-css';css.textContent=`
 .nl .nav{display:flex;gap:var(--s2);margin-top:var(--s3)}.nl .nav .btn{flex:1;min-height:var(--target);font-size:var(--fs-sm)}
 .nl .inp{display:flex;gap:var(--s2)}.nl .inp input{flex:1;min-width:0;min-height:var(--target);padding:0 var(--s3);border:1px solid var(--line);border-radius:var(--r-md);font:inherit;font-size:var(--fs-md)}
 .nl .inp input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-s)}
+
+.nl-lab{display:flex;align-items:center;justify-content:space-between}
+.nl-dice{display:inline-flex;align-items:center;gap:var(--s1);min-height:32px;padding:0 var(--s3) 0 var(--s2);border:1px solid var(--line);border-radius:var(--r-pill);background:#fff;font-size:var(--fs-xs);font-weight:700;letter-spacing:0;text-transform:none;color:var(--accent)}
+.nl-dice svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;transition:transform .4s}
+.nl-dice:hover{border-color:var(--accent);background:var(--accent-s)}.nl-dice:hover svg{transform:rotate(180deg)}
+.nl-real{display:flex;gap:var(--s2);align-items:flex-start;margin:var(--s2) 0 0;padding:var(--s2) var(--s3);border-radius:var(--r-md);background:#fff8e6;font-size:var(--fs-sm);line-height:1.4;color:#4a3000;text-align:left}
+.nl-real svg{flex:none;width:20px;height:20px;margin-top:1px;fill:none;stroke:#9a6200;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nl-lv{position:relative;height:20px;overflow:hidden;border-radius:var(--r-pill);background:#dfe7f2}
+.nl-lv i{position:absolute;inset:0 auto 0 0;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--accent),#7aa2ff);transition:width .5s}
+.nl-lv small{position:relative;display:block;padding:0 var(--s3);font-size:var(--fs-xs);font-weight:600;line-height:20px;color:var(--ink)}
+.opts{display:grid;gap:var(--s2);margin-bottom:var(--s2)}
+.opt{display:flex;align-items:center;justify-content:center;min-height:56px;padding:var(--s1) var(--s2);border:2px solid var(--line);border-radius:var(--r-md);background:#fff;transition:transform .15s,border-color .15s,background .15s}
+.opt .otiles{display:flex;flex-wrap:wrap;justify-content:center;gap:4px}
+.opt:hover:not(:disabled){transform:translateY(-1px);border-color:var(--accent)}
+.opt.bad{border-color:#e0a09a;background:#fdeceb;opacity:.6}
+.opt.good{border-color:#0f7a55;background:#e2f6ec}
+.opt.shake{animation:nlshake .4s}
+@keyframes nlshake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.nl-tile.xs{padding:0 var(--s2);font-size:calc(18px * var(--k));cursor:inherit;animation:none}
 `;
 document.head.appendChild(css);
-window.NamesLab={target:()=>MS.target,mode:m=>{NMODE=m}};
+window.NamesLab={target:()=>MS.target,kind:()=>MS.kind,mode:m=>{NMODE=m},forceKind:null};   // forceKind is only for testing
 }catch(e){console.error('names.js:',e)}
 })();
